@@ -1,3 +1,8 @@
+# Interpreter for the canonical esoteric language.
+# Compiles to bytecode, no optimizations, done for fun.
+# Pete Elmore (pete at debu dot gs), New Year's Day 2014
+# Released into the public domain.
+
 implement Bf;
 
 include "sys.m"; sys: Sys;
