@@ -66,6 +66,7 @@ execute(code: array of int, arena: array of byte)
 	pc := 0;
 	p := 0;
 	buf := array[1] of byte;
+	stopreading := 0;
 	for(;;) {
 		case code[pc] {
 		DEC => arena[p]--;
@@ -77,8 +78,14 @@ execute(code: array of int, arena: array of byte)
 		INCP =>
 			p = (p + 1) % len arena;
 		READ =>
-			sys->read(sys->fildes(0), buf, 1);
-			arena[p] = buf[0];
+			arena[p] = byte 0;
+			if(!stopreading) {
+				n := sys->read(sys->fildes(0), buf, 1);
+				if(n < 1)
+					stopreading = 1;
+				else
+					arena[p] = buf[0];
+			}
 		WRITE =>
 			buf[0] = arena[p];
 			sys->write(sys->fildes(1), buf, 1);
