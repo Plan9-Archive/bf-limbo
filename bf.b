@@ -22,7 +22,7 @@ init(nil: ref Draw->Context, args: list of string)
 
 	arg->init(args);
 	eflag := 0;
-	disas := 0;
+	outputmode := 0;
 	source := "";
 	while ((opt := arg->opt()) != 0) {
 		case opt {
@@ -30,7 +30,9 @@ init(nil: ref Draw->Context, args: list of string)
 			eflag = 1;
 			source = arg->arg();
 		'd' =>
-			disas = 1;
+			outputmode = 1;
+		'c' =>
+			outputmode = 2;
 		* =>
 			usage();
 		}
@@ -44,16 +46,16 @@ init(nil: ref Draw->Context, args: list of string)
 	}
 
 	code := compile(source);
-	if(disas) {
-		sys->print("%s", disassemble(code));
-		return;
+	case outputmode {
+	0 => execute(code, array[ARENASZ] of { * => byte 0 });
+	1 => sys->print("%s", disassemble(code));
+	2 => sys->print("%s", bf2limbo(code));
 	}
-	execute(code, array[ARENASZ] of { * => byte 0 });
 }
 
 usage()
 {
-	sys->fprint(sys->fildes(2), "usage: bf [program.bf|-e inline-program]");
+	sys->fprint(sys->fildes(2), "usage: bf [-d|-c] [program.bf|-e inline-program]");
 	raise "fail:usage";
 }
 
@@ -154,6 +156,69 @@ disassemble(code: array of int): string
 		s += sys->sprint("[0x%08x] %5s\n", i, in);
 	}
 	return s;
+}
+
+bf2limbo(code: array of int): string
+{
+	indent := 1;
+	s := "implement BfProg;\n" +
+		"include \"sys.m\"; sys: Sys;\n" +
+		"include \"draw.m\";\n" +
+		"BfProg: module {\n" +
+		"\tinit: fn(nil: ref Draw->Context, nil: list of string);\n" +
+		"};\n" +
+		"init(nil: ref Draw->Context, nil: list of string)\n{\n" +
+		"\tsys = load Sys Sys->PATH;\n" +
+		"\tp := 0;\n" +
+		"\tstopreading := 0;\n" +
+		"\tn := 0;\n" +
+		"\tbuf := array[1] of byte;\n" +
+		"\tarena := array[" + string ARENASZ + "] of { * => byte 0 };\n" +
+		"\n";
+	for(i := 0; i < len code && code[i] != EXIT; i++) {
+		case code[i] {
+		DEC => s += indents(indent) + "arena[p]--;\n";
+		INC => s += indents(indent) + "arena[p]++;\n";
+		DECP =>
+			s += indents(indent) + "p--;\n" +
+				indents(indent) + "if(p < 0)\n" +
+				indents(indent + 1) + "p = len arena - 1;\n";
+		INCP =>
+			s += indents(indent) + "p++;\n" +
+				indents(indent) + "if(p == len arena)\n" +
+				indents(indent + 1) + "p = 0;\n";
+		READ =>
+			s += indents(indent) + "arena[p] = byte -1;\n" +
+				indents(indent) + "if(!stopreading) {\n" +
+				indents(indent + 1) + "n = sys->read(sys->fildes(0), buf, 1);\n" +
+				indents(indent + 1) + "if(n < 1)\n" +
+				indents(indent + 2) + "stopreading = 1;\n" +
+				indents(indent + 1) + "else\n" +
+				indents(indent + 2) + "arena[p] = buf[0];\n" +
+				indents(indent) + "}\n";
+		WRITE =>
+			s += indents(indent) + "buf[0] = arena[p];\n" +
+				indents(indent) + "sys->write(sys->fildes(1), buf, 1);\n";
+		JNZ =>
+			indent--;
+			s += indents(indent) + "}\n";
+		JZ =>
+			s += indents(indent) + "while(arena[p] != byte 0) {\n";
+			indent++;
+		}
+		
+	}
+	return s + "}\n";
+}
+
+indents(i: int): string
+{
+	r := "";
+	while(i > 0) {
+		r += "\t";
+		i--;
+	}
+	return r;
 }
 
 readfile(fname: string): string
