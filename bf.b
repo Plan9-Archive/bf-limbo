@@ -22,12 +22,15 @@ init(nil: ref Draw->Context, args: list of string)
 
 	arg->init(args);
 	eflag := 0;
+	disas := 0;
 	source := "";
 	while ((opt := arg->opt()) != 0) {
 		case opt {
 		'e' =>
 			eflag = 1;
 			source = arg->arg();
+		'd' =>
+			disas = 1;
 		* =>
 			usage();
 		}
@@ -41,6 +44,10 @@ init(nil: ref Draw->Context, args: list of string)
 	}
 
 	code := compile(source);
+	if(disas) {
+		sys->print("%s", disassemble(code));
+		return;
+	}
 	execute(code, array[ARENASZ] of { * => byte 0 });
 }
 
@@ -127,6 +134,26 @@ execute(code: array of int, arena: array of byte)
 		}
 		pc++;
 	}
+}
+
+disassemble(code: array of int): string
+{
+	s := "";
+	for(i := 0; i < len code && code[i] != EXIT; i++) {
+		in := "";
+		case code[i] {
+		DEC => in = "DEC";
+		INC => in = "INC";
+		DECP => in = "DECP";
+		INCP => in = "INCP";
+		READ => in = "READ";
+		WRITE => in = "WRITE";
+		JNZ => in = sys->sprint("  JNZ 0x%08x", code[++i]);
+		JZ => in = sys->sprint("   JZ 0x%08x", code[++i]);
+		}
+		s += sys->sprint("[0x%08x] %5s\n", i, in);
+	}
+	return s;
 }
 
 readfile(fname: string): string
