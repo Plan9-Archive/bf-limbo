@@ -7,6 +7,7 @@ implement Bf;
 
 include "sys.m"; sys: Sys;
 include "draw.m";
+include "arg.m";
 
 Bf: module {
 	init: fn(nil: ref Draw->Context, args: list of string);
@@ -17,13 +18,36 @@ Bf: module {
 init(nil: ref Draw->Context, args: list of string)
 {
 	sys = load Sys Sys->PATH;
-	args = tl args;
-	if(args == nil || len args != 1) {
-		sys->fprint(sys->fildes(2), "usage: bf program");
-		raise "fail:usage";
+	arg := load Arg Arg->PATH;
+
+	arg->init(args);
+	eflag := 0;
+	source := "";
+	while ((opt := arg->opt()) != 0) {
+		case opt {
+		'e' =>
+			eflag = 1;
+			source = arg->arg();
+		* =>
+			usage();
+		}
 	}
-	code := compile(hd args);
+	args = arg->argv();
+	if(!eflag) {
+		if(len args != 1)
+			usage();
+		else
+			source = readfile(hd args);
+	}
+
+	code := compile(source);
 	execute(code, array[ARENASZ] of { * => byte 0 });
+}
+
+usage()
+{
+	sys->fprint(sys->fildes(2), "usage: bf [program.bf|-e inline-program]");
+	raise "fail:usage";
 }
 
 compile(p: string): array of int
@@ -78,7 +102,7 @@ execute(code: array of int, arena: array of byte)
 		INCP =>
 			p = (p + 1) % len arena;
 		READ =>
-			arena[p] = byte 0;
+			arena[p] = byte -1;
 			if(!stopreading) {
 				n := sys->read(sys->fildes(0), buf, 1);
 				if(n < 1)
@@ -103,4 +127,24 @@ execute(code: array of int, arena: array of byte)
 		}
 		pc++;
 	}
+}
+
+readfile(fname: string): string
+{
+	fd := sys->open(fname, Sys->OREAD);
+	if(fd == nil)
+		die(fname);
+
+	src := "";
+	buf := array[Sys->ATOMICIO] of byte;
+	while((n := sys->read(fd, buf, len buf)) > 0) {
+		src += string buf[:n];
+	}
+	return src;
+}
+
+die(s: string)
+{
+	sys->fprint(sys->fildes(2), "bf: %s: %r\n", s);
+	raise "fail:errors";
 }
