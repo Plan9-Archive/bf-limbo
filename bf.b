@@ -114,15 +114,15 @@ compile(p: string): array of int
 			c := hd marks;
 			marks = tl marks;
 			code[pc++] = JNZ;
-			code[pc++] = c + 1;
 			code[c] = pc;
+			code[pc++] = c;
 		}
 	}
 	if(marks != nil) {
 		sys->fprint(sys->fildes(2), "bf: unmatched '['.");
 		raise "fail:errors";
 	}
-	return code[:i + 1];
+	return code[:pc + 1];
 }
 
 execute(code: array of int, arena: array of byte)
@@ -154,12 +154,12 @@ execute(code: array of int, arena: array of byte)
 			sys->write(sys->fildes(1), buf, 1);
 		JNZ =>
 			if(arena[p] != byte 0)
-				pc = code[pc + 1] - 1;
+				pc = code[pc + 1];
 			else
 				pc++;
 		JZ =>
 			if(arena[p] == byte 0)
-				pc = code[pc + 1] - 1;
+				pc = code[pc + 1];
 			else
 				pc++;
 		EXIT => return;
@@ -206,7 +206,7 @@ bf2limbo(code: array of int): string
 		"\n";
 	for(i := 0; i < len code && code[i] != EXIT; i++) {
 		case code[i] {
-		ADD => s += indents(indent) + "arena[p] += byte " + string code[++i] + ";\nz";
+		ADD => s += indents(indent) + "arena[p] += byte " + string code[++i] + ";\n";
 		ADDP =>
 			s += indents(indent) + "p += " + string code[++i] + ";\n" +
 				indents(indent) + "while(p < 0)\n" +
